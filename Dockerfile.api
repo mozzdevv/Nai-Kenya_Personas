@@ -1,0 +1,33 @@
+# Kikuyu Project - API Service Dockerfile
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies (lightweight — API only)
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir -r requirements-api.txt
+
+# Copy API code
+COPY api/ ./api/
+COPY personas/ ./personas/
+COPY llm/ ./llm/
+COPY validation/ ./validation/
+COPY config.py .
+
+# Create data directory
+RUN mkdir -p /app/data
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+EXPOSE 8000
+
+# Run with uvicorn
+CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000"]

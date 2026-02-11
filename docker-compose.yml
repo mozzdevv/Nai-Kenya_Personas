@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # Bot service - runs the persona bots
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kikuyu-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - api
+    networks:
+      - kikuyu-network
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import config; print('healthy')" ]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # API service - FastAPI backend for dashboard
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: kikuyu-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - kikuyu-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Dashboard service - React frontend
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: kikuyu-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - kikuyu-network
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:80" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  kikuyu-network:
+    driver: bridge
+
+volumes:
+  data:
+  logs:
