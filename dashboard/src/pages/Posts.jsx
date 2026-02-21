@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getPosts } from '../api';
+import { formatDualTime } from '../utils';
 import { MessageSquare, Heart, Repeat2, MessageCircle, Filter, Info, ShieldCheck, ShieldAlert, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 
 function PostRow({ post }) {
@@ -29,6 +30,7 @@ function PostRow({ post }) {
                                 score >= 50 ? 'bg-yellow-400/10 text-yellow-400' :
                                     'bg-red-400/10 text-red-400'
                                 }`}
+                            title="Safety & Style Score (0-100): Measures adherence to persona guidelines and safety rules."
                         >
                             {score >= 80 ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
                             {score}%
@@ -48,7 +50,7 @@ function PostRow({ post }) {
                     </div>
                 </td>
                 <td className="text-xs text-[var(--text-secondary)]">
-                    {new Date(post.created_at.replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatDualTime(post.created_at)}
                 </td>
             </tr>
             {expanded && (
@@ -161,7 +163,7 @@ export default function Posts() {
                             <tr>
                                 <th>Persona</th>
                                 <th>Content</th>
-                                <th>Authenticity</th>
+                                <th>Safety & Style Score</th>
                                 <th>LLM</th>
                                 <th>Engagement</th>
                                 <th>Time</th>

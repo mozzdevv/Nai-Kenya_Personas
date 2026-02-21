@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getErrors } from '../api';
-import { AlertTriangle, AlertCircle, Filter, RefreshCw } from 'lucide-react';
+import { formatDualTime } from '../utils';
+import { AlertTriangle, AlertCircle, Filter, RefreshCw, ShieldCheck } from 'lucide-react';
 
 export default function Errors() {
     const [errors, setErrors] = useState([]);
@@ -97,10 +98,12 @@ export default function Errors() {
                         <div className="w-6 h-6 border-2 border-[var(--accent-green)] border-t-transparent rounded-full animate-spin" />
                     </div>
                 ) : errors.length === 0 ? (
-                    <div className="text-center py-12">
-                        <AlertCircle size={48} className="mx-auto mb-4 text-[var(--accent-green)]" />
-                        <p className="text-[var(--text-secondary)]">No errors found</p>
-                        <p className="text-sm text-[var(--text-secondary)]">Everything is running smoothly!</p>
+                    <div className="text-center py-12 bg-[var(--bg-tertiary)] rounded-xl border border-[var(--bg-secondary)]">
+                        <div className="inline-flex p-4 rounded-full bg-green-900/20 mb-4">
+                            <ShieldCheck size={48} className="text-[var(--accent-green)]" />
+                        </div>
+                        <h3 className="text-lg font-medium text-[var(--text-primary)]">System Healthy</h3>
+                        <p className="text-[var(--text-secondary)] mt-1">No errors or warnings detected in the logs.</p>
                     </div>
                 ) : (
                     <div className="space-y-3 max-h-[500px] overflow-auto">
@@ -108,8 +111,8 @@ export default function Errors() {
                             <div
                                 key={error.id}
                                 className={`p-4 rounded-lg border-l-4 ${error.level === 'error'
-                                        ? 'bg-red-500/10 border-red-500'
-                                        : 'bg-orange-500/10 border-orange-500'
+                                    ? 'bg-red-500/10 border-red-500'
+                                    : 'bg-orange-500/10 border-orange-500'
                                     }`}
                             >
                                 <div className="flex items-center justify-between mb-2">
@@ -124,7 +127,7 @@ export default function Errors() {
                                         </span>
                                     </div>
                                     <span className="text-xs text-[var(--text-secondary)]">
-                                        {new Date(error.created_at).toLocaleString()}
+                                        {formatDualTime(error.created_at)}
                                     </span>
                                 </div>
                                 <p className="text-sm mb-2">{error.message}</p>

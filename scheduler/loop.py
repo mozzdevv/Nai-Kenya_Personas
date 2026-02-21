@@ -5,6 +5,7 @@ APScheduler-based loop that runs every 4-12 hours.
 
 import logging
 import random
+import re
 from datetime import datetime, timedelta
 import pytz
 from typing import List, Dict, Optional
@@ -18,7 +19,7 @@ from rag.pinecone_store import PineconeStore
 from x_api.client import XClient
 from x_api.retrieval import SeedRetriever
 from x_api.engagement import filter_engaging_tweets, select_for_quote_tweet
-from personas.base import KamauPersona, WanjikuPersona, Persona
+from personas.base import Persona
 from validation import ContentValidator
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class PersonaBot:
         self.rag = rag_store
         self.dry_run = dry_run
         self.quoted_tweet_ids: List[str] = []
+        self.dynamic_vocabulary: List[str] = []  # Stores injected vocabulary for the current cycle
     
     def _get_recent_posts(self, limit: int = 10) -> List[str]:
         """Fetch recent posts for this persona from the database."""
@@ -60,7 +62,8 @@ class PersonaBot:
     def _validate_content(self, content: str, topic: str) -> 'ValidationResult':
         """Run content through the authenticity validator."""
         recent = self._get_recent_posts()
-        validator = ContentValidator(recent_posts=recent)
+        # Pass dynamic vocabulary injected from the scheduler loop
+        validator = ContentValidator(recent_posts=recent, dynamic_vocabulary=self.dynamic_vocabulary)
         return validator.validate(content, self.persona.handle, topic)
     
     def generate_original_post(self, topic: str) -> tuple:
@@ -313,21 +316,19 @@ class MVPLoop:
     
     def _init_bots(self) -> List[PersonaBot]:
         """Initialize all persona bots."""
+        from personas import get_personas
         bots = []
         
+        kamau_persona, wanjiku_persona = get_personas()
+        
         # Kamau bot
-        kamau_persona = KamauPersona(
-            name="", handle="", description="", tone="sarcastic",
-            personality_traits=[], topics=[], signature_phrases=[],
-            proverb_style="", persona_type="edgy"
-        )
         kamau_client = XClient(
             consumer_key=settings.kamau.consumer_key,
             consumer_secret=settings.kamau.consumer_secret,
             access_token=settings.kamau.access_token,
             access_token_secret=settings.kamau.access_token_secret,
             bearer_token=settings.kamau.bearer_token,
-            persona_name="Kamau",
+            persona_name="Juma",
         )
         bots.append(PersonaBot(
             persona=kamau_persona,
@@ -338,18 +339,13 @@ class MVPLoop:
         ))
         
         # Wanjiku bot
-        wanjiku_persona = WanjikuPersona(
-            name="", handle="", description="", tone="wise",
-            personality_traits=[], topics=[], signature_phrases=[],
-            proverb_style="", persona_type="nurturing"
-        )
         wanjiku_client = XClient(
             consumer_key=settings.wanjiku.consumer_key,
             consumer_secret=settings.wanjiku.consumer_secret,
             access_token=settings.wanjiku.access_token,
             access_token_secret=settings.wanjiku.access_token_secret,
             bearer_token=settings.wanjiku.bearer_token,
-            persona_name="Wanjiku",
+            persona_name="Amani",
         )
         bots.append(PersonaBot(
             persona=wanjiku_persona,
@@ -382,20 +378,19 @@ class MVPLoop:
                 logger.error(f"Pinecone storage failed: {e}")
             
             # 2. Store in Local Database (for Knowledge Base tab)
-            count = 0
+            knowledge_items = []
             for tweet in tweets:
                  # Tag topics
                 tweet["topics"] = self._tag_topics(tweet["text"])
                 
-                # Log to DB
-                ActivityLogger.log_knowledge(
-                    source=tweet.get("source", "seed_account"),
-                    content=tweet["text"],
-                    topics=tweet["topics"],
-                    vector_id=tweet.get("id")
-                )
-                count += 1
-            logger.info(f"Stored {count} tweets in Knowledge Base DB")
+                knowledge_items.append({
+                    "source": tweet.get("source", "seed_account"),
+                    "content": tweet["text"],
+                    "topics": tweet["topics"],
+                    "vector_id": tweet.get("id")
+                })
+            
+            ActivityLogger.log_knowledge_batch(knowledge_items)
         
         return tweets
     
@@ -410,83 +405,158 @@ class MVPLoop:
         
         return tags
     
-    def run_cycle(self):
-        """Run one complete MVP cycle."""
-        logger.info(f"=== Starting MVP cycle at {datetime.now()} ===")
+    def _check_time_constraints(self) -> bool:
+        """Check if we are allowed to post based on EAT time and limits."""
+        # 1. Kenya Time (EAT)
+        eat = pytz.timezone("Africa/Nairobi")
+        now_eat = datetime.now(eat)
         
-        try:
-            # 1. Refresh RAG with seed content
-            fresh_tweets = self.refresh_rag()
+        # 2. Global Window (08:23 - 23:40)
+        start_time = now_eat.replace(hour=8, minute=23, second=0, microsecond=0)
+        end_time = now_eat.replace(hour=23, minute=40, second=0, microsecond=0)
+        
+        if not (start_time <= now_eat <= end_time):
+            logger.info(f"Adding sleep... Outside operating hours (08:23 - 23:40 EAT). Current EAT: {now_eat.strftime('%H:%M')}")
+            return False
             
-            # 2. Find engaging content for quotes
+        # 3. Work Hours (10:00 - 15:00)
+        is_work_hours = 10 <= now_eat.hour < 15
+        max_posts_per_hour = 2 if is_work_hours else 6
+        
+        # 4. Database Checks (Global)
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                
+                # Check recent post gap (System-wide)
+                cursor.execute("SELECT created_at FROM posts ORDER BY created_at DESC LIMIT 1")
+                last_post = cursor.fetchone()
+                
+                if last_post:
+                    # Parse timestamp (stored as UTC ISO string)
+                    last_time = datetime.fromisoformat(last_post["created_at"])
+                    # Ensure timezone awareness for comparison (assuming DB is UTC)
+                    if last_time.tzinfo is None:
+                        last_time = last_time.replace(tzinfo=pytz.UTC)
+                        
+                    now_utc = datetime.now(pytz.UTC)
+                    time_since_last = (now_utc - last_time).total_seconds() / 60.0
+                    
+                    if time_since_last < 2.0:
+                        logger.info(f"Skipping... Last post was {time_since_last:.1f} mins ago (min gap: 2 mins).")
+                        return False
+                
+                # Check hourly count (System-wide)
+                one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+                cursor.execute("SELECT COUNT(*) as count FROM posts WHERE created_at > ?", (one_hour_ago,))
+                posts_last_hour = cursor.fetchone()["count"]
+                
+                if posts_last_hour >= max_posts_per_hour:
+                    logger.info(f"Skipping... Hourly limit reached ({posts_last_hour}/{max_posts_per_hour}). Mode: {'Work' if is_work_hours else 'Normal'}")
+                    return False
+
+                logger.info(f"Scheduler Go-Ahead: {posts_last_hour}/{max_posts_per_hour} posts/hr. Gap OK.")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Scheduler check failed: {e}")
+            return False  # Fail safe
+
+    def _extract_dynamic_vocabulary(self, tweets: List[Dict]) -> List[str]:
+        """
+        Extract frequent non-standard words from recent tweets to use as dynamic context.
+        Simple heuristic: words >= 4 chars, occurring > 1 time, not in standard ignore list.
+        """
+        if not tweets:
+            return []
+            
+        word_counts = {}
+        for t in tweets:
+            # Simple tokenization
+            words = re.findall(r'\b\w+\b', t["text"].lower())
+            for w in words:
+                if len(w) > 3: # Ignore short filler words
+                    word_counts[w] = word_counts.get(w, 0) + 1
+        
+        # Filter for words that appear more than once (trending/common)
+        # In a real system, we'd check against a standard English dict to be sure,
+        # but for now, just capturing frequency helps catch slang/hashtags.
+        dynamic_vocab = [w for w, count in word_counts.items() if count > 1]
+        
+        # Also include ALL hashtags found
+        for t in tweets:
+            hashtags = re.findall(r'#\w+', t["text"].lower())
+            dynamic_vocab.extend(hashtags)
+            
+        return list(set(dynamic_vocab))
+
+    def run_cycle(self):
+        """Run one Smart Scheduler cycle."""
+        logger.info(f"=== Scheduler Tick at {datetime.now()} ===")
+        
+        # 1. Check constraints
+        if not self._check_time_constraints():
+            return
+            
+        try:
+            # 2. Refresh RAG (always keep knowledge fresh)
+            fresh_tweets = self.refresh_rag()
             engaging = filter_engaging_tweets(fresh_tweets, max_results=10)
             
-            # 3. Run each bot
-            for bot in self.bots:
-                logger.info(f"Running cycle for {bot.persona.handle}")
-                
-                # Post 1-2 original tweets
-                bot.run_posting_cycle()
-                
-                # Maybe post a second one (50% chance)
-                if random.random() > 0.5:
-                    bot.run_posting_cycle()
-                
-                # Quote/retweet engaging content
-                bot.run_quote_cycle(engaging)
-                
-                # Reply to mentions
-                bot.run_reply_cycle()
+            # --- Dynamic Vocabulary Injection ---
+            # Extract trending words/context from the fresh batch
+            dynamic_vocab = self._extract_dynamic_vocabulary(fresh_tweets)
+            if dynamic_vocab:
+                logger.info(f"Dynamic Vocabulary Injected: {len(dynamic_vocab)} terms (e.g. {dynamic_vocab[:5]})")
             
-            logger.info(f"=== MVP cycle completed at {datetime.now()} ===")
+            # 3. Select ONE bot to act (to enforce system-wide spacing)
+            # We don't want all bots firing at once.
+            bot = random.choice(self.bots)
+            
+            # Pass dynamic vocabulary to the bot for this cycle
+            bot.dynamic_vocabulary = dynamic_vocab
+            
+            # 4. Decide Action (Original Post vs Quote vs Reply)
+            # Weights: 60% Original, 30% Quote, 10% Reply
+            roll = random.random()
+            
+            if roll < 0.6:
+                logger.info(f"Attempting ORIGINAL POST for {bot.persona.handle}")
+                bot.run_posting_cycle()
+            elif roll < 0.9 and engaging:
+                logger.info(f"Attempting QUOTE for {bot.persona.handle}")
+                bot.run_quote_cycle(engaging)
+            else:
+                logger.info(f"Attempting REPLY for {bot.persona.handle}")
+                bot.run_reply_cycle()
+                
+            logger.info(f"=== Cycle Action Completed ===")
             
         except Exception as e:
-            logger.error(f"MVP cycle error: {e}", exc_info=True)
+            logger.error(f"Cycle error: {e}", exc_info=True)
     
     def start(self, interval_hours: float = 6, start_time_est: Optional[str] = None):
-        """Start the scheduler."""
+        """Start the scheduler (Interval: 5 mins)."""
         scheduler = BlockingScheduler()
         
-        start_date = None
-        if start_time_est:
-            try:
-                # Parse "HH:MM"
-                hour, minute = map(int, start_time_est.split(":"))
-                
-                # Get current time in EST
-                est = pytz.timezone("US/Eastern")
-                now_est = datetime.now(est)
-                
-                # Create target time for today in EST
-                target_est = now_est.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                
-                # If 10am has already passed today, schedule for tomorrow
-                if target_est <= now_est:
-                    target_est += timedelta(days=1)
-                
-                start_date = target_est
-                logger.info(f"Scheduling first run for {start_date} (EST)")
-            except Exception as e:
-                logger.error(f"Failed to parse START_TIME_EST '{start_time_est}': {e}. Starting immediately.")
+        # Fixed 5-minute interval for granular checks
+        interval_minutes = 5
         
-        # Add job with interval trigger
+        # Add job
         scheduler.add_job(
             self.run_cycle,
-            IntervalTrigger(hours=interval_hours, start_date=start_date),
+            IntervalTrigger(minutes=interval_minutes),
             id="mvp_loop",
-            name="MVP Loop",
+            name="Smart Scheduler",
             replace_existing=True,
         )
         
-        if not start_date:
-            # Run immediately only if no scheduled start
-            logger.info("Running initial cycle...")
-            self.run_cycle()
-        else:
-            logger.info(f"Waiting for scheduled start at {start_date}...")
+        logger.info(f"Smart Scheduler started. Checking every {interval_minutes} minutes.")
+        logger.info("Constraints: 08:23-23:40 EAT | Work: 10-3pm (2/hr) | Normal: 6/hr | Gap: 2-20m")
         
-        # Start scheduler
-        logger.info(f"Scheduler started. Running every {interval_hours} hours.")
+        # Initial run
+        self.run_cycle()
+        
         try:
             scheduler.start()
         except (KeyboardInterrupt, SystemExit):

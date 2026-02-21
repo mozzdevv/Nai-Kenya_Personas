@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getRagActivity } from '../api';
+import { formatDualTime } from '../utils';
 import { Database, Download, Upload, Search, Info } from 'lucide-react';
 
 const ACTION_ICONS = {
@@ -87,7 +88,7 @@ function ActivityItem({ item }) {
                     </div>
                 </div>
                 <span className="text-xs text-[var(--text-secondary)] whitespace-nowrap">
-                    {new Date(item.created_at).toLocaleTimeString()}
+                    {formatDualTime(item.created_at)}
                 </span>
             </div>
 
@@ -168,7 +169,7 @@ export default function RagActivity() {
             <header className="lg:ml-0 ml-12">
                 <h1 className="text-2xl font-bold">RAG Activity</h1>
                 <p className="text-[var(--text-secondary)]">
-                    Retrieval-Augmented Generation — the system finds real Kikuyu/Kenyan tweets to guide AI content creation.
+                    Retrieval-Augmented Generation — the system finds real Nairobi/Kenyan tweets to guide AI content creation.
                 </p>
             </header>
 
@@ -178,7 +179,7 @@ export default function RagActivity() {
                     <Info size={18} className="mt-0.5 shrink-0" style={{ color: 'var(--accent-green)' }} />
                     <div className="text-sm text-[var(--text-secondary)]">
                         <p className="font-semibold text-[var(--text-primary)] mb-1">How RAG Works</p>
-                        <p>Before generating each post, the bot searches the Pinecone vector database for real tweets that semantically match the current topic. These reference tweets are fed to the AI as style examples, helping it produce culturally authentic content. The <strong>similarity score</strong> (0–100%) measures how closely each reference tweet relates to the query topic.</p>
+                        <p>Before generating each post, the bot searches the Pinecone vector database for real tweets that semantically match the current topic. These reference tweets are fed to the AI as style examples. The <strong>Similarity Score</strong> (0–100%) indicates how closely the reference tweet matches the topic's context.</p>
                     </div>
                 </div>
             </div>

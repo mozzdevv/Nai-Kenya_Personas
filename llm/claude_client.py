@@ -80,9 +80,10 @@ class ClaudeClient:
         
         system_prompt = f"""You are {persona_description}
 
-You are creating authentic Kikuyu/Kiswahili/Sheng content. 
+You are creating authentic Kiswahili/Sheng content. 
 Use the provided examples to capture the natural rhythm and idioms.
 Focus on cultural depth, proverbs, empathy, and relatable wisdom.
+CRITICAL FORMATTING: Never use em-dashes (—). Never end with an emoji. Emoji mid-sentence or skip entirely. Keep it raw and fragmented like real Nairobi Twitter.
 Keep responses under 280 characters for Twitter.
 Be warm, wise, and genuine - never formal or robotic."""
         

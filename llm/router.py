@@ -23,19 +23,19 @@ class RouteDecision(Enum):
 # Keywords that trigger Claude routing
 CLAUDE_TRIGGERS = {
     # Proverbs and wisdom
-    "proverbs": ["kĩugo", "proverb", "wisdom", "elders", "ancestors", "mũndũ mũgo", "thimo"],
+    "proverbs": ["methali", "proverb", "wisdom", "hekima", "wazee", "elders", "ancestors"],
     
     # Cultural and heritage
-    "culture": ["heritage", "traditional", "ceremony", "mũgĩthi", "gĩkũyũ", "ancestors", "customs"],
+    "culture": ["heritage", "urithi", "traditional", "sherehe", "ceremony", "desturi", "mila", "customs"],
     
     # Empathy and family
-    "empathy": ["miss", "home", "family", "mũciĩ", "nyũmba", "homesick", "remember", "moyo"],
+    "empathy": ["miss", "home", "family", "nyumbani", "familia", "nyumba", "homesick", "remember", "moyo"],
     
     # Diaspora and nostalgia
-    "diaspora": ["diaspora", "abroad", "marekani", "atlanta", "georgia", "immigration", "visa", "back home"],
+    "diaspora": ["diaspora", "abroad", "ughaibuni", "immigration", "visa", "back home"],
     
     # Reflective content
-    "reflective": ["reflection", "life", "journey", "maisha", "safari", "lessons", "growing up"],
+    "reflective": ["reflection", "kutafakari", "life", "journey", "maisha", "safari", "lessons", "growing up"],
 }
 
 
@@ -83,7 +83,7 @@ def should_route_to_claude(
     
     # Persona-based routing
     if persona_type == "wise" or persona_type == "nurturing":
-        persona_triggers = [w for w in ["proverb", "wisdom", "culture", "family"] if w in topic_lower]
+        persona_triggers = [w for w in ["proverb", "methali", "wisdom", "hekima", "culture", "family", "familia"] if w in topic_lower]
         if persona_triggers:
             matched_triggers.extend(persona_triggers)
             reason = f"Wise persona + topic keywords ({', '.join(persona_triggers)}) → Claude for cultural wisdom"

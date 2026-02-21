@@ -29,12 +29,13 @@ APPROVED_HASHTAGS = {
 AI_ENGLISH_FRAMERS = [
     "our ancestors knew",
     "as our elders say",
-    "as they say in kikuyu",
-    "in kikuyu culture",
+    "as they say in swahili",
+    "in swahili culture",
     "in our tradition",
     "which translates to",
     "which means",
     "this proverb means",
+    "the proverb teaches us",
     "the wisdom here is",
     "the lesson is",
 ]
@@ -53,6 +54,7 @@ EVENING_WORDS = ["jioni", "evening", "sunset", "night"]
 
 # Swahili/Sheng words (common, for code-switch ratio detection)
 SWAHILI_SHENG_MARKERS = {
+    # Swahili core
     "sasa", "maze", "bana", "aki", "nkt", "lakini", "kama", "sana",
     "tu", "ata", "hii", "yetu", "watu", "ni", "ya", "na", "wa",
     "kwa", "ile", "hapa", "saa", "leo", "jana", "kesho", "kweli",
@@ -60,17 +62,19 @@ SWAHILI_SHENG_MARKERS = {
     "matatu", "fare", "rent", "hustle", "biashara", "serikali",
     "unaona", "unajua", "tunaishi", "wueh", "eh", "si", "ama",
     "mtu", "watu", "jamaa", "dame", "msee", "buda", "mathee",
+    # Sheng
     "mbogi", "dem", "dishi", "fiti", "poa", "noma", "rada",
     "cheki", "soma", "ambia", "peleka", "chunga", "angalia",
-}
-
-# Kikuyu markers
-KIKUYU_MARKERS = {
-    "gĩkũyũ", "mũciĩ", "nyũmba", "thĩĩ", "ũtheri", "mũndũ",
-    "kĩugo", "thimo", "mũgĩthi", "gũtirĩ", "kĩega", "mũgo",
-    "rĩĩtwa", "kĩrĩra", "ĩno", "ngai", "mwene", "nyaga",
-    "cucu", "guka", "mũtumia", "mũndũ", "nĩ", "gũkũ",
-    "rũciũ", "mũtĩ", "nyeki", "kĩondo", "mũgunda",
+    # Additional Swahili words
+    "kwani", "enyewe", "basi", "tena", "sisi", "wao", "yote",
+    "kabisa", "haraka", "polepole", "tafadhali", "asante",
+    "habari", "mambo", "vipi", "nini", "wapi", "lini",
+    "nyumbani", "familia", "watoto", "mama", "baba",
+    "methali", "hekima", "maisha", "safari", "desturi",
+    "sherehe", "nyumba", "upendo", "nguvu", "moyo",
+    "chai", "chakula", "ugali", "nyama", "sukuma",
+    "asubuhi", "jioni", "usiku", "mchana",
+    "siasa", "uhuru", "amani", "umoja",
 }
 
 
@@ -105,12 +109,14 @@ class ContentValidator:
             # regenerate content
     """
     
-    def __init__(self, recent_posts: Optional[List[str]] = None):
+    def __init__(self, recent_posts: Optional[List[str]] = None, dynamic_vocabulary: Optional[List[str]] = None):
         """
         Args:
             recent_posts: Last 5-10 posts from this persona (for repetition check)
+            dynamic_vocabulary: List of current trending/local words to treat as valid context
         """
         self.recent_posts = recent_posts or []
+        self.dynamic_vocabulary = set(w.lower() for w in dynamic_vocabulary) if dynamic_vocabulary else set()
     
     def validate(
         self,
@@ -241,6 +247,24 @@ class ContentValidator:
             warnings.append("Contains placeholder URL")
             deductions += 5
             
+        # 9. Em-dash / en-dash usage (AI giveaway — real KOT never uses these)
+        if "\u2014" in content or "\u2013" in content:
+            issues.append("Contains em-dash/en-dash (AI pattern)")
+            deductions += 25
+        
+        # 10. Trailing emoji (AI pattern — real KOT puts emoji mid-sentence or skips)
+        stripped = content.rstrip()
+        if stripped:
+            # Check if the last character(s) are emoji
+            last_chars = stripped[-2:]  # Emoji can be 1-2 chars
+            trailing_emoji = re.search(
+                r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F900-\U0001F9FF\U00002702-\U000027B0\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF]$',
+                stripped
+            )
+            if trailing_emoji:
+                warnings.append("Trailing emoji (should be mid-sentence or absent)")
+                deductions += 15
+            
         return issues, warnings, deductions
     
     # ── Layer 2: Style Authenticity ──────────────────────────────────
@@ -262,13 +286,23 @@ class ContentValidator:
             return ["Empty content"], 50
         
         # ── Code-switching ratio ──
+        # Check against static Swahili/Sheng markers AND dynamic vocabulary
         swahili_sheng_count = sum(1 for w in words if w.strip(".,!?;:\"'()") in SWAHILI_SHENG_MARKERS)
-        kikuyu_count = sum(1 for w in words if w.strip(".,!?;:\"'") in KIKUYU_MARKERS)
-        local_ratio = (swahili_sheng_count + kikuyu_count) / total_words
+        dynamic_count = sum(1 for w in words if w.strip(".,!?;:\"'") in self.dynamic_vocabulary)
+        
+        local_ratio = (swahili_sheng_count + dynamic_count) / total_words
+        # Cap at 1.0 just in case
+        local_ratio = min(1.0, local_ratio)
         
         if local_ratio < 0.15:
-            warnings.append(f"Too much English ({(1-local_ratio)*100:.0f}% English)")
-            deductions += 12
+            # Check if dynamic words saved it
+            if dynamic_count > 0:
+                 warnings.append(f"Low local usage ({(1-local_ratio)*100:.0f}% English), but {dynamic_count} trending term(s) found.")
+                 # Smaller penalty if they used trending words
+                 deductions += 5
+            else:
+                warnings.append(f"Too much English ({(1-local_ratio)*100:.0f}% English)")
+                deductions += 12
         elif local_ratio > 0.85:
             warnings.append(f"Almost no English ({local_ratio*100:.0f}% local)")
             deductions += 5

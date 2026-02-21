@@ -1,4 +1,4 @@
-# Kikuyu Project - API Service Dockerfile
+# Nairobi Swahili Bot - API Service Dockerfile
 
 FROM python:3.11-slim
 

@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Database path
-DB_PATH = Path(__file__).parent.parent / "data" / "kikuyu.db"
+DB_PATH = Path(__file__).parent.parent / "data" / "nairobi.db"
 
 
 def init_db():
@@ -175,26 +175,45 @@ class ActivityLogger:
             conn.commit()
     
     @staticmethod
-    def log_knowledge(
-        source: str,
-        content: str,
-        topics: List[str],
-        vector_id: Optional[str] = None,
-    ):
-        """Log item to knowledge base."""
+    def log_knowledge_batch(items: List[Dict]):
+        """
+        Log multiple items to knowledge base in one transaction.
+        
+        Args:
+            items: List of dicts containing 'source', 'content', 'topics', 'vector_id'
+        """
+        if not items:
+            return
+            
         with get_db() as conn:
             cursor = conn.cursor()
-            # Check for duplicates first
-            cursor.execute("SELECT id FROM knowledge_base WHERE content = ?", (content,))
-            if cursor.fetchone():
-                return
-                
-            cursor.execute("""
-                INSERT INTO knowledge_base 
-                (source, content, topics, vector_id)
-                VALUES (?, ?, ?, ?)
-            """, (source, content, json.dumps(topics), vector_id))
-            conn.commit()
+            
+            # Filter duplicates based on content
+            contents = [item["content"] for item in items]
+            placeholders = ",".join(["?"] * len(contents))
+            
+            cursor.execute(f"SELECT content FROM knowledge_base WHERE content IN ({placeholders})", contents)
+            existing_contents = {row[0] for row in cursor.fetchall()}
+            
+            # Prepare new items
+            new_items = []
+            for item in items:
+                if item["content"] not in existing_contents:
+                    new_items.append((
+                        item["source"], 
+                        item["content"], 
+                        json.dumps(item["topics"]), 
+                        item.get("vector_id")
+                    ))
+            
+            if new_items:
+                cursor.executemany("""
+                    INSERT INTO knowledge_base 
+                    (source, content, topics, vector_id)
+                    VALUES (?, ?, ?, ?)
+                """, new_items)
+                conn.commit()
+                logger.info(f"Batch logged {len(new_items)} items to Knowledge Base")
 
     @staticmethod
     def log_rag_activity(

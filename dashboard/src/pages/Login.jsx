@@ -32,7 +32,7 @@ export default function Login() {
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <div className="text-4xl mb-2">🇰🇪</div>
-                    <h1 className="text-2xl font-bold">Kikuyu Dashboard</h1>
+                    <h1 className="text-2xl font-bold">Nairobi Bot Dashboard</h1>
                     <p className="text-[var(--text-secondary)] text-sm mt-1">
                         Monitor your X persona bots
                     </p>

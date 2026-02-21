@@ -73,14 +73,7 @@ export default function Validation() {
                                     ))}
                                 </div>
                             </div>
-                            <div>
-                                <h4 className="text-sm font-bold uppercase tracking-wider text-[var(--accent-purple)] mb-3">Kikuyu (Authenticity Boost)</h4>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {config.language_markers.kikuyu.map(word => (
-                                        <span key={word} className="px-2 py-0.5 bg-[var(--bg-tertiary)] rounded text-xs border border-[var(--bg-secondary)]">{word}</span>
-                                    ))}
-                                </div>
-                            </div>
+
                         </div>
                     </div>
                 </div>

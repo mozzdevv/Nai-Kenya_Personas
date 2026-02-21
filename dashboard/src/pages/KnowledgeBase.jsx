@@ -26,7 +26,9 @@ const KnowledgeBase = () => {
     return (
         <div className="space-y-6">
             <header>
-                <h1 className="text-3xl font-bold tracking-tight text-secondary-900">Knowledge Base</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-secondary-900">
+                    Knowledge Base <span className="text-lg font-normal text-secondary-500">({items.length} items)</span>
+                </h1>
                 <p className="mt-2 text-lg text-secondary-600">
                     Source material used for RAG generation (from seed accounts).
                 </p>

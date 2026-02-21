@@ -1,5 +1,5 @@
 """
-Kikuyu Project - Configuration Management
+Nairobi Swahili Bot Project - Configuration Management
 Pydantic settings for API credentials and app configuration.
 """
 
@@ -18,12 +18,12 @@ class XCredentials(BaseSettings):
 
 
 class KamauCredentials(XCredentials):
-    """X API credentials for Kamau (@kamaukeeeraw)."""
+    """X API credentials for Juma (@kamaukeeeraw)."""
     model_config = {"env_prefix": "KAMAU_", "env_file": ".env", "extra": "ignore"}
 
 
 class WanjikuCredentials(XCredentials):
-    """X API credentials for Wanjiku (@wanjikusagee)."""
+    """X API credentials for Amani (@wanjikusagee)."""
     model_config = {"env_prefix": "WANJIKU_", "env_file": ".env", "extra": "ignore"}
 
 
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     
     # Pinecone
     pinecone_api_key: str = Field(..., env="PINECONE_API_KEY")
-    pinecone_index_name: str = Field(default="kikuyu-rag", env="PINECONE_INDEX_NAME")
+    pinecone_index_name: str = Field(default="nairobi-swahili-rag", env="PINECONE_INDEX_NAME")
     
     # Scheduler
     loop_interval_hours: float = Field(default=6.0, env="LOOP_INTERVAL_HOURS")
@@ -51,28 +51,28 @@ class Settings(BaseSettings):
 
 
 # Seed accounts to monitor for content inspiration
+# Focused on Swahili-speaking Nairobi voices and Kenyan culture
 SEED_ACCOUNTS = [
-    # Kikuyu language & culture
-    "kikuyutweets",
-    "kikuyuproverb",
-    "DrKanyuira",
-    "mundu_useful",
-    # Kenyan diaspora
-    "kenyandiaspora",
-    "kenya_usa",
-    # Nairobi locals & commentary
+    # Nairobi locals & street commentary
     "Ma3Route",           # Nairobi matatu & transport culture
-    "bonifaboreal",       # Nairobi street talk
+    "_CrazyNairobian",    # Billy the Goat — witty Nairobi storytelling
+    "bonifacemwangi",     # Nairobi activist, social justice commentary
+    "GabrielOguda",       # Political commentary, witty Swahili-English mix
+    "EricOmondi",         # Comedy, viral content, social campaigns
     "KenyanTraffic",      # Daily life in Nairobi
     "naborealkenya",      # Nairobi events & culture
+    # News & culture
     "NairobiLeo",         # Nairobi news & city culture
     "KenyanHistory",      # Kenyan cultural history
     "MutahiKagwe",        # Kenyan public discourse
     "Kilonje_Africa",     # Pan-African cultural commentary
+    # Community & vibes
     "OleItumbi",          # Kenyan political commentary
-    "NjorogeWaKariuki",   # Kikuyu community voices
     "KenyanVibe",         # Pop culture & daily vibes
     "NairobiNights",      # Nairobi nightlife & social scene
+    # Kenyan diaspora
+    "kenyandiaspora",
+    "kenya_usa",
 ]
 
 # Topics/keywords for content filtering
@@ -105,63 +105,63 @@ TOPICS = {
     # === CLAUDE-ROUTED (cultural depth, wisdom, nostalgia) ===
     # These topics contain 2+ trigger keywords → score ≥ 2 → Claude
     "proverbs_wisdom": [
-        "kikuyu proverb about wisdom from our ancestors",
-        "kĩugo from the elders about life lessons",
-        "traditional wisdom and proverb our cucu used to say",
-        "ancestors' thimo about family and heritage",
-        "mũndũ mũgo elders and the wisdom they carried",
-        "proverb from growing up about the journey of life",
-        "gĩkũyũ wisdom about customs and ceremony",
-        "elders proverb about heritage and family bonds",
+        "methali ya wazee kuhusu hekima ya maisha",
+        "hekima kutoka kwa wazee wetu kuhusu familia",
+        "methali ya zamani kuhusu maisha na safari",
+        "wazee walikuwa na hekima kubwa kuhusu desturi",
+        "methali kuhusu upendo na familia ya nyumbani",
+        "hekima ya bibi kuhusu maisha na mila",
+        "wazee na methali zao za kale kuhusu ustawi",
+        "hekima na mila za watu wetu tangu zamani",
     ],
     "diaspora_nostalgia": [
         "diaspora life abroad missing home and family",
-        "kenyan in marekani remembering back home vibes",
-        "atlanta georgia diaspora missing nyũmba ya cucu",
+        "kenyan abroad remembering back home vibes",
+        "maisha ya ughaibuni na kukumbuka nyumbani",
         "immigration journey and visa hustle from back home",
-        "diaspora abroad homesick for mũciĩ and family",
+        "diaspora abroad homesick for nyumbani na familia",
         "growing up in kenya then moving abroad — the journey",
-        "diaspora life lessons from marekani to back home",
+        "diaspora maisha and lessons from abroad to back home",
         "miss home family gatherings during holidays abroad",
     ],
     "family_home": [
-        "family traditions at mũciĩ during December",
-        "nyũmba ya cucu — the home we all miss and remember",
-        "growing up in a kikuyu family and the lessons learned",
-        "family ceremony at home — customs and heritage",
-        "miss the moyo of home and family dinners",
-        "homesick for family and the life we had back home",
-        "wisdom from grandma at home about family and heritage",
+        "familia na mila za nyumbani wakati wa December",
+        "nyumba ya bibi — the home we all miss and remember",
+        "growing up in a Kenyan family na masomo ya maisha",
+        "sherehe ya familia nyumbani — desturi na mila",
+        "miss the warmth of home and family dinners",
+        "homesick for familia and the maisha we had back home",
+        "hekima from grandma at home about familia and heritage",
         "family journey from rural home to Nairobi maisha",
     ],
     "ceremonies_traditions": [
-        "traditional gĩkũyũ ceremony and customs we must preserve",
-        "heritage of our ancestors — traditional ceremony practices",
-        "mũgĩthi ceremony and the customs of our elders",
-        "gĩkũyũ traditional ceremony for family and ancestors",
-        "elders performing ceremony with wisdom and heritage",
-        "customs and traditional practices vanishing — heritage at risk",
-        "ceremony of remembrance for ancestors and family",
-        "traditional wedding customs and ceremony in gĩkũyũ heritage",
+        "sherehe za jadi na desturi tunazopaswa kuhifadhi",
+        "urithi wa wazee wetu — sherehe za jadi",
+        "sherehe ya familia na mila za wazee wetu",
+        "desturi za jadi za familia yetu na wazee",
+        "wazee wakifanya sherehe kwa hekima na urithi",
+        "desturi na mila za zamani zinapotea — urithi hatarini",
+        "sherehe ya kumbukumbu ya wazee na familia",
+        "desturi za harusi na sherehe katika urithi wetu",
     ],
     "reflection_identity": [
-        "reflection on life and the journey of maisha",
-        "growing up kikuyu — lessons and wisdom from the safari of life",
-        "life reflection on family, heritage, and where we come from",
-        "the journey of a kenyan — lessons from home to diaspora",
-        "safari of life — wisdom from elders about growing up",
-        "reflection on ancestors and the heritage they left behind",
-        "maisha lessons — remember where you come from, family first",
-        "journey of self-discovery and remembering our customs",
+        "kutafakari maisha na safari ya maisha",
+        "growing up Kenyan — masomo na hekima from the safari of life",
+        "kutafakari juu ya familia, urithi, na asili yetu",
+        "safari ya Mkenya — masomo from home to diaspora",
+        "safari ya maisha — hekima kutoka wazee kuhusu kukua",
+        "kutafakari juu ya wazee na urithi waliotuachia",
+        "masomo ya maisha — kumbuka ulikotoka, familia kwanza",
+        "safari ya kujitambua na kukumbuka mila zetu",
     ],
     # === BALANCED (has some cultural keywords but mixed) ===
     "culture": [
-        "gĩkũyũ heritage and our identity",
-        "kikuyu traditional music and dance",
-        "mũgĩthi nights heritage celebration",
-        "traditional food customs passed down",
-        "heritage month — celebrating ancestors",
-        "kikuyu ceremony — rite of passage customs",
+        "urithi wetu na utambulisho wa Kikenya",
+        "muziki wa jadi wa Kenya na ngoma",
+        "usiku wa burudani Nairobi",
+        "mila za chakula zilizopitishwa na wazee",
+        "mwezi wa urithi — kusherehekea wazee",
+        "sherehe za kale — mila na desturi zetu",
     ],
 }
 

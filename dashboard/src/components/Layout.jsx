@@ -54,7 +54,7 @@ export default function Layout() {
                     <div className="flex items-center gap-3">
                         <span className="text-3xl">🇰🇪</span>
                         <div>
-                            <h1 className="font-bold text-lg">Kikuyu</h1>
+                            <h1 className="font-bold text-lg">Nairobi Bots</h1>
                             <p className="text-xs text-[var(--text-secondary)]">Dashboard</p>
                         </div>
                     </div>

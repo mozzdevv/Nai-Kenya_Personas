@@ -1,4 +1,4 @@
-# Kikuyu Project - X Persona Bots
+# Nairobi Swahili Bot - X Persona Bots
 # Multi-stage Docker build for production deployment
 
 FROM python:3.11-slim as builder

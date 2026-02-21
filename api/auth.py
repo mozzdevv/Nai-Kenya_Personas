@@ -12,13 +12,13 @@ import os
 import hashlib
 
 # Configuration
-SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "kikuyu-dashboard-secret-key-change-in-production")
+SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "nairobi-bot-dashboard-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 # Default credentials (override in production via env vars)
 DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "admin")
-DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "kikuyu2024")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "nairobi2024")
 
 
 class Token(BaseModel):

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getStats, getPosts, getRoutingStats } from '../api';
 import {
     TrendingUp,
@@ -39,6 +40,9 @@ function RecentPosts({ posts }) {
             <div className="card-header">
                 <MessageSquare size={20} />
                 <span>Recent Posts</span>
+                <Link to="/posts" className="ml-auto text-xs text-[var(--accent-green)] hover:underline">
+                    View All
+                </Link>
             </div>
             <div className="space-y-4 max-h-96 overflow-auto">
                 {posts.length === 0 ? (

@@ -1,12 +1,12 @@
-# 🇰🇪 Kikuyu Project — X Persona Bots
+# 🇰🇪 Nairobi Swahili Bot — X Persona Bots
 
-Autonomous X (Twitter) bot system for authentic Kikuyu/Nairobi personas with hybrid LLM routing (Grok + Claude), cloud-based RAG, and a built-in content authenticity validator.
+Autonomous X (Twitter) bot system for authentic Nairobi Swahili personas with hybrid LLM routing (Grok + Claude), cloud-based RAG, and a built-in content authenticity validator.
 
 ## ✨ Features
 
-- **2 Distinct Personas**: Kamau (sarcastic hustler) & Wanjiku (warm sage)
-- **Hybrid LLM Routing**: Grok for daily/edgy content, Claude for proverbs/wisdom
-- **Cloud RAG**: Pinecone vector store for authentic slang/phrasing
+- **2 Distinct Personas**: Juma (sarcastic hustler) & Amani (warm sage)
+- **Hybrid LLM Routing**: Grok for daily/edgy content, Claude for methali/wisdom
+- **Cloud RAG**: Pinecone vector store for authentic Swahili/Sheng phrasing
 - **Content Authenticity Validator**: 3-layer pipeline catches AI patterns before posting
 - **Full X Integration**: Post, quote, retweet, reply
 - **Monitoring Dashboard**: Real-time stats, post history, LLM routing, error logs
@@ -17,7 +17,7 @@ Autonomous X (Twitter) bot system for authentic Kikuyu/Nairobi personas with hyb
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                    APScheduler (4-12hr loop)                  │
+│                    APScheduler (5-min check loop)             │
 ├──────────────────────────────────────────────────────────────┤
 │  ┌──────────┐    ┌─────────────┐    ┌──────────────────┐     │
 │  │ Seed     │───▶│  Pinecone   │───▶│  Hybrid Router   │     │
@@ -32,7 +32,7 @@ Autonomous X (Twitter) bot system for authentic Kikuyu/Nairobi personas with hyb
 │  ┌────────────────────────────────────────────▼─────────────┐ │
 │  │                    Persona Bots                          │ │
 │  │  ┌─────────────────┐      ┌─────────────────┐            │ │
-│  │  │ Kamau @kamaukeeeraw│    │ Wanjiku @wanjikusagee│       │ │
+│  │  │ Juma @kamaukeeeraw│    │ Amani @wanjikusagee│          │ │
 │  │  │ Sarcastic/Edgy  │      │ Warm/Wise        │           │ │
 │  │  └────────┬────────┘      └────────┬─────────┘           │ │
 │  └───────────┼───────────────────────┼──────────────────────┘ │
@@ -56,7 +56,7 @@ Autonomous X (Twitter) bot system for authentic Kikuyu/Nairobi personas with hyb
 
 ```bash
 # Clone and setup
-cd "Kikuyu Project"
+cd "Nairobi Swahili Bot"
 python -m venv venv
 source venv/bin/activate
 
@@ -90,13 +90,13 @@ docker-compose down
 |----------|-------------|---------|
 | `LOOP_INTERVAL_HOURS` | Time between posting cycles | `6` |
 | `DRY_RUN` | If true, don't actually post | `false` |
-| `PINECONE_INDEX_NAME` | Pinecone index name | `kikuyu-rag` |
+| `PINECONE_INDEX_NAME` | Pinecone index name | `nairobi-swahili-rag` |
 | `GROK_MODEL` | Grok 4 model to use | `grok-4-fast` |
 
 ## 📁 Project Structure
 
 ```
-Kikuyu Project/
+Nairobi Swahili Bot/
 ├── main.py                  # Entry point
 ├── config.py                # Settings, credentials, seed accounts & topics
 ├── llm/
@@ -111,12 +111,11 @@ Kikuyu Project/
 │   ├── retrieval.py         # Seed account tweet fetcher
 │   └── engagement.py        # Engagement scoring & filtering
 ├── personas/
-│   └── base.py              # Persona configs (Kamau/Wanjiku) + anti-AI prompt system
+│   └── base.py              # Persona configs (Juma/Amani) + anti-AI prompt system
 ├── validation/
-│   ├── __init__.py
 │   └── content_validator.py # 3-layer authenticity validation engine
 ├── scheduler/
-│   └── loop.py              # MVP loop with validator integration
+│   └── loop.py              # Smart scheduler with validator integration
 ├── api/
 │   ├── server.py            # FastAPI dashboard backend
 │   ├── database.py          # SQLite logging (posts, RAG, routing, errors)
@@ -125,12 +124,12 @@ Kikuyu Project/
 ├── dashboard/               # React frontend (Vite)
 │   └── src/pages/
 │       ├── Overview.jsx
-│       ├── Posts.jsx         # Posts timeline (with authenticity scores)
-│       ├── RagActivity.jsx   # RAG fetch/store/retrieve logs
-│       ├── Routing.jsx       # LLM routing decisions
+│       ├── Posts.jsx
+│       ├── RagActivity.jsx
+│       ├── Routing.jsx
 │       └── Errors.jsx
 ├── Dockerfile               # Bot container
-├── Dockerfile.api           # API container (lightweight)
+├── Dockerfile.api           # API container
 ├── docker-compose.yml       # 3-service orchestration
 ├── requirements.txt         # Full dependencies (bot)
 └── requirements-api.txt     # Lightweight API dependencies
@@ -141,69 +140,58 @@ Kikuyu Project/
 Every generated post passes through a 3-layer validation pipeline before posting. If a post fails, it's regenerated up to 2 more times with the rejection reason appended to the LLM prompt.
 
 ### Layer 1: Anti-Pattern Filter
-Catches obvious AI tells:
-- **Repetitive openers** — Detects same opening phrase as last 5 posts → FAIL
-- **English proverb translations** — "which means", "as our elders say" → FAIL
-- **Formal connectors** — "Furthermore", "Additionally" → FAIL
-- **Invented hashtags** — Only known Kenyan hashtags allowed (e.g. `#KOT`)
-- **Exclamation/emoji stacking** — Real tweets don't do `!!!` or 5+ emojis
-- **Over-structured** — Real tweets are 1 thought, not intro→body→conclusion
+Catches obvious AI tells: repetitive openers, English proverb translations, formal connectors, invented hashtags, emoji stacking, over-structured tweets.
 
 ### Layer 2: Style Authenticity
 Scores tweets against real Nairobi Twitter patterns:
-- **Code-switching ratio**: ~60% Swahili/Sheng, ~25% English, ~15% Kikuyu
+- **Code-switching ratio**: ~45-55% Swahili, ~20-30% English, ~15-25% Sheng
 - **Word length**: Real tweets use shorter words
 - **Punctuation density**: Real tweets have sparse punctuation
 - **Capitalization**: Real tweets are mostly lowercase
 
 ### Layer 3: Contextual Grounding
-- **Time-of-day awareness**: Morning references blocked at night, and vice versa (Nairobi = UTC+3)
-- **Context injection**: System prompts include current Nairobi time-of-day context
-
-### Scoring
-Each post gets an **authenticity score (0–100)**. Posts need ≥50 and zero hard failures to pass. Scores are stored in the database and visible on the dashboard.
+Time-of-day awareness: morning references blocked at night, and vice versa (Nairobi = UTC+3).
 
 ## 🎭 Personas
 
-### Kamau Njoroge (@kamaukeeeraw)
-> "Niaje wasee wa mtaa! 🔥 Kamau hapa, Eastlands representative."
+### Juma Mwangi (@kamaukeeeraw)
+> "Niaje wasee wa mtaa! 🔥 Juma hapa, Eastlands representative."
 
 - **Tone**: Sarcastic, blunt, dark humor
 - **Topics**: Politics, daily struggles, traffic, cost of living
 - **LLM**: Primarily Grok (edgy/street energy)
 
-### Wanjiku Njeri (@wanjikusagee)
-> "Rĩrĩa mwagĩrĩru, my dear ones! 🌸"
+### Amani Akinyi (@wanjikusagee)
+> "Habari zenu wapendwa! 🌸 Amani hapa, tuko pamoja."
 
 - **Tone**: Warm, wise, nurturing
 - **Topics**: Culture, heritage, family, wisdom
-- **LLM**: Routes to Claude for proverbs/cultural content
+- **LLM**: Routes to Claude for methali/cultural content
 
-## 🔄 MVP Loop
+## 🔄 Smart Scheduler
 
-Every 4-12 hours:
-1. **Retrieve** fresh posts from 20+ seed accounts (Nairobi-focused)
+Every 5 minutes (08:23–23:40 EAT):
+1. **Retrieve** fresh posts from 16+ seed accounts (Nairobi-focused)
 2. **Store** in Pinecone RAG for style reference
-3. **Find** engaging content for quotes (likes≥20, RTs≥5)
-4. **Generate** 1-2 original posts per persona
-5. **Validate** each post through the authenticity pipeline (retry up to 2x on failure)
-6. **Quote** top engaging content with commentary
-7. **Reply** to mentions
+3. **Extract** dynamic vocabulary from trending words
+4. **Select** one bot randomly (Juma or Amani)
+5. **Roll** action type: 60% original, 30% quote, 10% reply
+6. **Generate** content → **Validate** through 3-layer pipeline → **Post** to X
 
 ## 📊 Monitoring Dashboard
 
-A real-time React dashboard at `http://localhost:3000`:
+A real-time React dashboard at `http://localhost:5173`:
 
 | Page | Description |
 |------|-------------|
 | **Overview** | Total posts, engagement stats, LLM usage pie chart |
 | **Posts** | Filterable timeline with authenticity scores |
-| **RAG Activity** | Fetch/store/retrieval logs with explainer cards |
+| **RAG Activity** | Fetch/store/retrieval logs |
 | **LLM Routing** | Grok vs Claude decisions with trigger analysis |
 | **Knowledge Base** | RAG corpus contents and sources |
 | **Errors** | Filterable error log with tracebacks |
 
-**Default login**: `admin` / `kikuyu2024`
+**Default login**: `admin` / `nairobi2024`
 
 ## 🔒 Security
 
@@ -227,15 +215,10 @@ railway init
 railway up
 ```
 
-### Render
-1. Create new Web Service → connect GitHub repo
-2. Set environment variables from `.env`
-3. Deploy
-
-### AWS ECS / Fargate
-1. Push image to ECR
-2. Create ECS task definition
-3. Run as scheduled task or always-on service
+### Docker Compose
+```bash
+docker-compose up -d --build
+```
 
 ## ⚠️ Safety Guidelines
 

@@ -156,7 +156,7 @@ def generate_secure_token(length: int = 32) -> str:
 def hash_sensitive_data(data: str, salt: str = None) -> str:
     """Hash sensitive data for storage."""
     if salt is None:
-        salt = os.getenv("HASH_SALT", "kikuyu-default-salt")
+        salt = os.getenv("HASH_SALT", "nairobi-bot-default-salt")
     
     return hashlib.sha256(f"{salt}{data}".encode()).hexdigest()
 
@@ -201,7 +201,7 @@ def validate_production_config():
         warnings.append("DASHBOARD_SECRET_KEY should be a strong random string (32+ chars)")
     
     password = os.getenv("DASHBOARD_PASSWORD", "")
-    if not password or password == "kikuyu2024" or len(password) < 12:
+    if not password or password == "nairobi2024" or len(password) < 12:
         warnings.append("DASHBOARD_PASSWORD should be changed from default (12+ chars)")
     
     # Check for required env vars

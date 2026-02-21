@@ -6,7 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: kikuyu-bot
+    container_name: nairobi-bot
     restart: unless-stopped
     env_file:
       - .env
@@ -18,7 +18,7 @@ services:
     depends_on:
       - api
     networks:
-      - kikuyu-network
+      - nairobi-network
     healthcheck:
       test: [ "CMD", "python", "-c", "import config; print('healthy')" ]
       interval: 5m
@@ -31,7 +31,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: kikuyu-api
+    container_name: nairobi-api
     restart: unless-stopped
     env_file:
       - .env
@@ -42,7 +42,7 @@ services:
     volumes:
       - ./data:/app/data
     networks:
-      - kikuyu-network
+      - nairobi-network
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
@@ -55,14 +55,14 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
-    container_name: kikuyu-dashboard
+    container_name: nairobi-dashboard
     restart: unless-stopped
     ports:
       - "3000:80"
     depends_on:
       - api
     networks:
-      - kikuyu-network
+      - nairobi-network
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:80" ]
       interval: 30s
@@ -70,7 +70,7 @@ services:
       retries: 3
 
 networks:
-  kikuyu-network:
+  nairobi-network:
     driver: bridge
 
 volumes:

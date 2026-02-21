@@ -88,9 +88,10 @@ class GrokClient:
         
         system_prompt = f"""You are {persona_description}
 
-Use the provided examples for natural Kikuyu/Kiswahili/Sheng style. 
+Use the provided examples for natural Kiswahili/Sheng style. 
 Generate content in your authentic voice - colloquial, street-smart, humorous.
 NEVER use formal language. NEVER sound robotic.
+CRITICAL FORMATTING: Never use em-dashes (—). Never end with an emoji. Emoji mid-sentence or skip entirely. Keep it raw and fragmented like real Nairobi Twitter.
 Keep responses under 280 characters for Twitter."""
         
         if task == "original_post":

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api, { getRoutingStats, getRoutingHistory } from '../api';
+import { formatDualTime } from '../utils';
 import { GitBranch, Zap, Sparkles, AlertCircle, BookOpen, Info } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -30,7 +31,7 @@ function DecisionRow({ item }) {
                 onClick={() => setShowReason(!showReason)}
             >
                 <td className="px-4 py-3 whitespace-nowrap text-[var(--text-secondary)] text-xs">
-                    {new Date(item.created_at).toLocaleTimeString()}
+                    {formatDualTime(item.created_at)}
                 </td>
                 <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
                     <div>{item.topic}</div>
@@ -147,10 +148,11 @@ export default function Routing() {
                     <Info size={18} className="mt-0.5 shrink-0" style={{ color: 'var(--accent-purple)' }} />
                     <div className="text-sm text-[var(--text-secondary)]">
                         <p className="font-semibold text-[var(--text-primary)] mb-1">How Routing Works</p>
-                        <p>Each topic is scanned for Claude trigger keywords (cultural, proverbs, diaspora, etc.). The <strong>Trigger Score</strong> counts how many keywords were found.
-                            Score <strong>≥ 2</strong> → <span style={{ color: 'var(--accent-purple)' }}>🧠 Claude</span> for nuanced cultural content.
-                            Score <strong>0–1</strong> → <span style={{ color: 'var(--accent-orange)' }}>⚡ Grok</span> for edgy street energy.
-                            Click any row to see the full reasoning.</p>
+                        <p>Each topic is scanned for Claude trigger keywords (cultural, proverbs, diaspora, etc.). The <strong>Cultural Relevance Score</strong> counts how many keywords were found.</p>
+                        <ul className="mt-2 space-y-1 list-disc list-inside">
+                            <li>Score <strong>≥ 2</strong> → <span style={{ color: 'var(--accent-purple)' }}>🧠 Claude</span> (High cultural depth required)</li>
+                            <li>Score <strong>0–1</strong> → <span style={{ color: 'var(--accent-orange)' }}>⚡ Grok</span> (Standard/Edgy content)</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -273,7 +275,7 @@ export default function Routing() {
                                         <th className="px-4 py-3">Topic / Task</th>
                                         <th className="px-4 py-3">Persona</th>
                                         <th className="px-4 py-3" title="Number of Claude trigger keywords found in the topic">
-                                            Trigger Score
+                                            Cultural Relevance Score
                                         </th>
                                         <th className="px-4 py-3">Keywords Matched</th>
                                         <th className="px-4 py-3 rounded-tr-lg">Model Used</th>

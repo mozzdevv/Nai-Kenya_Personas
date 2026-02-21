@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Kikuyu Dashboard API",
-    description="Monitoring API for Kikuyu X Persona Bots",
+    title="Nairobi Bot Dashboard API",
+    description="Monitoring API for Nairobi Swahili X Persona Bots",
     version="1.0.0",
     docs_url="/docs" if os.getenv("PRODUCTION", "false").lower() != "true" else None,
     redoc_url="/redoc" if os.getenv("PRODUCTION", "false").lower() != "true" else None,
@@ -172,15 +172,14 @@ async def get_validation_config(current_user: User = Depends(get_current_user)):
     """Get validation rules and parameters."""
     from validation.content_validator import (
         APPROVED_HASHTAGS, AI_ENGLISH_FRAMERS, FORMAL_CONNECTORS,
-        SWAHILI_SHENG_MARKERS, KIKUYU_MARKERS
+        SWAHILI_SHENG_MARKERS
     )
     return {
         "approved_hashtags": sorted(list(APPROVED_HASHTAGS)),
         "ai_patterns": AI_ENGLISH_FRAMERS,
         "formal_connectors": FORMAL_CONNECTORS,
         "language_markers": {
-            "swahili_sheng": sorted(list(SWAHILI_SHENG_MARKERS))[:50],  # Limit for brevity
-            "kikuyu": sorted(list(KIKUYU_MARKERS))
+            "swahili_sheng": sorted(list(SWAHILI_SHENG_MARKERS))[:80],
         },
         "scoring_rules": [
             {"name": "Anti-Patterns", "weight": "Hard/Soft Deductions", "descr": "Repetition, AI-isms, formal connectors, over-length."},
@@ -251,20 +250,11 @@ async def get_bot_logic(
 ):
     """Get bot logic and configuration."""
     from config import settings, TOPICS
-    from personas.base import KamauPersona, WanjikuPersona
+    from personas import get_personas
     from llm.router import CLAUDE_TRIGGERS
     from dataclasses import asdict
     
-    kamau = KamauPersona(
-        name="", handle="", description="", tone="sarcastic",
-        personality_traits=[], topics=[], signature_phrases=[],
-        proverb_style="", persona_type="edgy"
-    )
-    wanjiku = WanjikuPersona(
-        name="", handle="", description="", tone="wise",
-        personality_traits=[], topics=[], signature_phrases=[],
-        proverb_style="", persona_type="nurturing"
-    )
+    kamau, wanjiku = get_personas()
     
     return {
         "kamau": asdict(kamau),

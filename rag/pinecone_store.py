@@ -20,7 +20,7 @@ class PineconeStore:
     def __init__(
         self,
         api_key: str,
-        index_name: str = "kikuyu-rag",
+        index_name: str = "nairobi-swahili-rag",
         dimension: int = 384,  # MiniLM-L6-v2 dimension
     ):
         """
@@ -82,14 +82,27 @@ class PineconeStore:
         if not tweets:
             return 0
         
-        vectors = []
+        # Filter valid tweets first
+        valid_tweets = []
+        texts_to_embed = []
+        
         for tweet in tweets:
             text = tweet.get("text", "")
-            if not text or len(text) < 10:
-                continue
+            if text and len(text) >= 10:
+                valid_tweets.append(tweet)
+                texts_to_embed.append(text)
+        
+        if not valid_tweets:
+            return 0
             
-            # Generate embedding
-            embedding = self.embedder.embed(text)
+        # Generate embeddings in batch
+        logger.info(f"Generating embeddings for {len(valid_tweets)} tweets...")
+        embeddings = self.embedder.embed_batch(texts_to_embed)
+        
+        vectors = []
+        for i, tweet in enumerate(valid_tweets):
+            text = texts_to_embed[i]
+            embedding = embeddings[i]
             
             # Create vector with metadata
             vector_id = self._generate_id(text, source_account)
