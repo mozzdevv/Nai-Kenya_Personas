@@ -6,13 +6,13 @@ APScheduler-based loop that runs every 4-12 hours.
 import logging
 import random
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pytz
 from typing import List, Dict, Optional
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from config import settings, SEED_ACCOUNTS, TOPICS
+from config import settings, SEED_ACCOUNTS, TOPICS, PERSONA_TOPICS
 from api.database import ActivityLogger, get_db
 from llm.router import HybridRouter
 from rag.pinecone_store import PineconeStore
@@ -25,6 +25,13 @@ from validation import ContentValidator
 logger = logging.getLogger(__name__)
 
 MAX_VALIDATION_RETRIES = 2
+
+# ── Posting schedule constants ────────────────────────────────────────────────
+# Weekdays (Mon–Fri): 08:23–23:40 EAT only.
+# Weekend nights:
+#   Saturday early morning 00:00–03:59 EAT  (Friday late night extended to 4am)
+#   Sunday   early morning 00:00–01:59 EAT  (Saturday late night extended to 2am)
+WEEKEND_NIGHT_POSTS_PER_PERSONA = 5  # max posts per persona per weekend-night window
 
 
 class PersonaBot:
@@ -174,8 +181,11 @@ class PersonaBot:
     def run_posting_cycle(self, topic: Optional[str] = None):
         """Run a single posting cycle: 1-2 original posts."""
         if topic is None:
-            # Pick random topic category
-            category = random.choice(list(TOPICS.keys()))
+            # Pick from persona-specific topic pool (falls back to all topics)
+            persona_topic_keys = PERSONA_TOPICS.get(
+                self.persona.credentials_key, list(TOPICS.keys())
+            )
+            category = random.choice(persona_topic_keys)
             topic = random.choice(TOPICS[category])
         
         # Generate and post (with validation)
@@ -315,46 +325,47 @@ class MVPLoop:
         logger.info(f"MVP Loop initialized with {len(self.bots)} bots (dry_run={dry_run})")
     
     def _init_bots(self) -> List[PersonaBot]:
-        """Initialize all persona bots."""
+        """Initialize all persona bots. Skips any persona with missing/placeholder credentials."""
         from personas import get_personas
         bots = []
-        
-        kamau_persona, wanjiku_persona = get_personas()
-        
-        # Kamau bot
-        kamau_client = XClient(
-            consumer_key=settings.kamau.consumer_key,
-            consumer_secret=settings.kamau.consumer_secret,
-            access_token=settings.kamau.access_token,
-            access_token_secret=settings.kamau.access_token_secret,
-            bearer_token=settings.kamau.bearer_token,
-            persona_name="Juma",
-        )
-        bots.append(PersonaBot(
-            persona=kamau_persona,
-            x_client=kamau_client,
-            llm_router=self.llm_router,
-            rag_store=self.rag_store,
-            dry_run=self.dry_run,
-        ))
-        
-        # Wanjiku bot
-        wanjiku_client = XClient(
-            consumer_key=settings.wanjiku.consumer_key,
-            consumer_secret=settings.wanjiku.consumer_secret,
-            access_token=settings.wanjiku.access_token,
-            access_token_secret=settings.wanjiku.access_token_secret,
-            bearer_token=settings.wanjiku.bearer_token,
-            persona_name="Amani",
-        )
-        bots.append(PersonaBot(
-            persona=wanjiku_persona,
-            x_client=wanjiku_client,
-            llm_router=self.llm_router,
-            rag_store=self.rag_store,
-            dry_run=self.dry_run,
-        ))
-        
+
+        all_personas = get_personas()
+
+        # Map each persona's credentials_key to settings attribute
+        cred_map = {
+            "kamau":   settings.kamau,
+            "wanjiku": settings.wanjiku,
+            "baraka":  settings.baraka,
+            "zawadi":  settings.zawadi,
+            "zuri":    settings.zuri,
+            "john":    settings.john,
+            "karen":   settings.karen,
+        }
+
+        for persona in all_personas:
+            creds = cred_map.get(persona.credentials_key)
+            if not creds:
+                logger.warning(f"Skipping {persona.name} ({persona.handle}) — credentials missing or incomplete")
+                continue
+
+            client = XClient(
+                consumer_key=creds.consumer_key,
+                consumer_secret=creds.consumer_secret,
+                access_token=creds.access_token,
+                access_token_secret=creds.access_token_secret,
+                bearer_token=creds.bearer_token,
+                persona_name=persona.name,
+            )
+            bots.append(PersonaBot(
+                persona=persona,
+                x_client=client,
+                llm_router=self.llm_router,
+                rag_store=self.rag_store,
+                dry_run=self.dry_run,
+            ))
+            logger.info(f"Loaded bot: {persona.name} ({persona.handle})")
+
+        logger.info(f"Active bots: {len(bots)} / {len(all_personas)}")
         return bots
     
     def refresh_rag(self):
@@ -405,59 +416,119 @@ class MVPLoop:
         
         return tags
     
-    def _check_time_constraints(self) -> bool:
-        """Check if we are allowed to post based on EAT time and limits."""
-        # 1. Kenya Time (EAT)
+    def _get_window_type(self, now_eat):
+        """Classify current EAT time into a posting window.
+
+        Returns:
+            ('weekend_night', max_posts)  — Sat 00:00-03:59 or Sun 00:00-01:59 EAT
+            ('daytime',       0)          — 08:23-23:40 EAT any day
+            ('blocked',       0)          — outside all windows
+        """
+        wd = now_eat.weekday()  # 0=Mon … 6=Sun
+        h, m = now_eat.hour, now_eat.minute
+
+        # Sat 00:00-03:59 EAT  (Friday night extended to 4am Saturday)
+        if wd == 5 and h < 4:
+            return 'weekend_night', WEEKEND_NIGHT_POSTS_PER_PERSONA
+
+        # Sun 00:00-01:59 EAT  (Saturday night extended to 2am Sunday)
+        if wd == 6 and h < 2:
+            return 'weekend_night', WEEKEND_NIGHT_POSTS_PER_PERSONA
+
+        # Standard daytime window: 08:23-23:40 EAT  (all days)
+        after_start = h > 8 or (h == 8 and m >= 23)
+        before_end  = h < 23 or (h == 23 and m <= 40)
+        if after_start and before_end:
+            return 'daytime', 0
+
+        return 'blocked', 0
+
+    def _get_persona_posts_since_midnight(self, handle: str) -> int:
+        """Count posts logged for this persona since midnight EAT today."""
         eat = pytz.timezone("Africa/Nairobi")
         now_eat = datetime.now(eat)
-        
-        # 2. Global Window (08:23 - 23:40)
-        start_time = now_eat.replace(hour=8, minute=23, second=0, microsecond=0)
-        end_time = now_eat.replace(hour=23, minute=40, second=0, microsecond=0)
-        
-        if not (start_time <= now_eat <= end_time):
-            logger.info(f"Adding sleep... Outside operating hours (08:23 - 23:40 EAT). Current EAT: {now_eat.strftime('%H:%M')}")
-            return False
-            
-        # 3. Work Hours (10:00 - 15:00)
-        is_work_hours = 10 <= now_eat.hour < 15
-        max_posts_per_hour = 2 if is_work_hours else 6
-        
-        # 4. Database Checks (Global)
+        midnight_eat = now_eat.replace(hour=0, minute=0, second=0, microsecond=0)
+        midnight_utc = midnight_eat.astimezone(pytz.UTC).isoformat()
+
         try:
             with get_db() as conn:
                 cursor = conn.cursor()
-                
-                # Check recent post gap (System-wide)
+                cursor.execute(
+                    "SELECT COUNT(*) as count FROM posts WHERE persona = ? AND created_at > ?",
+                    (handle, midnight_utc)
+                )
+                return cursor.fetchone()["count"]
+        except Exception:
+            return 0
+
+    def _check_time_constraints(self) -> bool:
+        """Check if we are allowed to post based on EAT time and limits."""
+        eat = pytz.timezone("Africa/Nairobi")
+        now_eat = datetime.now(eat)
+        window, max_night_posts = self._get_window_type(now_eat)
+
+        if window == 'weekend_night':
+            # Weekend night: only enforce the 2-minute system-wide gap.
+            # Per-persona cap enforced in run_cycle().
+            day_name = now_eat.strftime('%A')
+            logger.info(f"Weekend night window ({day_name} {now_eat.strftime('%H:%M')} EAT)")
+            try:
+                with get_db() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT created_at FROM posts ORDER BY created_at DESC LIMIT 1")
+                    last_post = cursor.fetchone()
+                    if last_post:
+                        last_time = datetime.fromisoformat(last_post["created_at"])
+                        if last_time.tzinfo is None:
+                            last_time = last_time.replace(tzinfo=pytz.UTC)
+                        now_utc = datetime.now(pytz.UTC)
+                        time_since_last = (now_utc - last_time).total_seconds() / 60.0
+                        if time_since_last < 2.0:
+                            logger.info(f"Weekend night: gap too short ({time_since_last:.1f}m < 2m)")
+                            return False
+            except Exception:
+                pass
+            return True
+
+        if window == 'blocked':
+            logger.info(
+                f"Outside posting window (EAT: {now_eat.strftime('%A %H:%M')}). "
+                f"Weekdays: 08:23-23:40 | Sat night: until 04:00 | Sun night: until 02:00"
+            )
+            return False
+
+        # window == 'daytime': standard hourly-cap logic
+        is_work_hours = 10 <= now_eat.hour < 15
+        max_posts_per_hour = 2 if is_work_hours else 6
+
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+
+                # Check recent post gap (system-wide)
                 cursor.execute("SELECT created_at FROM posts ORDER BY created_at DESC LIMIT 1")
                 last_post = cursor.fetchone()
-                
                 if last_post:
-                    # Parse timestamp (stored as UTC ISO string)
                     last_time = datetime.fromisoformat(last_post["created_at"])
-                    # Ensure timezone awareness for comparison (assuming DB is UTC)
                     if last_time.tzinfo is None:
                         last_time = last_time.replace(tzinfo=pytz.UTC)
-                        
                     now_utc = datetime.now(pytz.UTC)
                     time_since_last = (now_utc - last_time).total_seconds() / 60.0
-                    
                     if time_since_last < 2.0:
                         logger.info(f"Skipping... Last post was {time_since_last:.1f} mins ago (min gap: 2 mins).")
                         return False
-                
-                # Check hourly count (System-wide)
+
+                # Check hourly count (system-wide)
                 one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
                 cursor.execute("SELECT COUNT(*) as count FROM posts WHERE created_at > ?", (one_hour_ago,))
                 posts_last_hour = cursor.fetchone()["count"]
-                
                 if posts_last_hour >= max_posts_per_hour:
                     logger.info(f"Skipping... Hourly limit reached ({posts_last_hour}/{max_posts_per_hour}). Mode: {'Work' if is_work_hours else 'Normal'}")
                     return False
 
                 logger.info(f"Scheduler Go-Ahead: {posts_last_hour}/{max_posts_per_hour} posts/hr. Gap OK.")
                 return True
-                
+
         except Exception as e:
             logger.error(f"Scheduler check failed: {e}")
             return False  # Fail safe
@@ -493,33 +564,55 @@ class MVPLoop:
     def run_cycle(self):
         """Run one Smart Scheduler cycle."""
         logger.info(f"=== Scheduler Tick at {datetime.now()} ===")
-        
+
         # 1. Check constraints
         if not self._check_time_constraints():
             return
-            
+
         try:
-            # 2. Refresh RAG (always keep knowledge fresh)
+            # 2. Refresh RAG
             fresh_tweets = self.refresh_rag()
             engaging = filter_engaging_tweets(fresh_tweets, max_results=10)
-            
-            # --- Dynamic Vocabulary Injection ---
-            # Extract trending words/context from the fresh batch
+
+            # Dynamic vocabulary injection
             dynamic_vocab = self._extract_dynamic_vocabulary(fresh_tweets)
             if dynamic_vocab:
                 logger.info(f"Dynamic Vocabulary Injected: {len(dynamic_vocab)} terms (e.g. {dynamic_vocab[:5]})")
-            
-            # 3. Select ONE bot to act (to enforce system-wide spacing)
-            # We don't want all bots firing at once.
-            bot = random.choice(self.bots)
-            
+
+            # 3. Select bot
+            eat = pytz.timezone("Africa/Nairobi")
+            now_eat = datetime.now(eat)
+            window, max_night_posts = self._get_window_type(now_eat)
+
+            if window == 'weekend_night':
+                # Weekend night: pick the first (shuffled) persona still under their nightly cap
+                shuffled = random.sample(self.bots, len(self.bots))
+                bot = None
+                for candidate in shuffled:
+                    count = self._get_persona_posts_since_midnight(candidate.persona.handle)
+                    if count < max_night_posts:
+                        bot = candidate
+                        logger.info(
+                            f"Weekend night: selected {candidate.persona.handle} "
+                            f"({count}/{max_night_posts} posts tonight)"
+                        )
+                        break
+                if bot is None:
+                    logger.info(
+                        f"Weekend night: all personas at {max_night_posts} posts — sleeping."
+                    )
+                    return
+            else:
+                # Daytime: pick randomly
+                bot = random.choice(self.bots)
+
             # Pass dynamic vocabulary to the bot for this cycle
             bot.dynamic_vocabulary = dynamic_vocab
-            
+
             # 4. Decide Action (Original Post vs Quote vs Reply)
             # Weights: 60% Original, 30% Quote, 10% Reply
             roll = random.random()
-            
+
             if roll < 0.6:
                 logger.info(f"Attempting ORIGINAL POST for {bot.persona.handle}")
                 bot.run_posting_cycle()
@@ -529,9 +622,9 @@ class MVPLoop:
             else:
                 logger.info(f"Attempting REPLY for {bot.persona.handle}")
                 bot.run_reply_cycle()
-                
+
             logger.info(f"=== Cycle Action Completed ===")
-            
+
         except Exception as e:
             logger.error(f"Cycle error: {e}", exc_info=True)
     

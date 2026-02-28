@@ -230,8 +230,7 @@ async def startup_event():
 
 
 class BotLogic(BaseModel):
-    kamau: Dict[str, Any]
-    wanjiku: Dict[str, Any]
+    personas: List[Dict[str, Any]]
     topics: Dict[str, List[str]]
     routing_triggers: Dict[str, List[str]]
     config: Dict[str, Any]
@@ -248,17 +247,16 @@ async def get_knowledge(
 async def get_bot_logic(
     current_user: User = Depends(get_current_user)
 ):
-    """Get bot logic and configuration."""
+    """Get bot logic and configuration for all personas."""
     from config import settings, TOPICS
     from personas import get_personas
     from llm.router import CLAUDE_TRIGGERS
     from dataclasses import asdict
-    
-    kamau, wanjiku = get_personas()
-    
+
+    all_personas = get_personas()
+
     return {
-        "kamau": asdict(kamau),
-        "wanjiku": asdict(wanjiku),
+        "personas": [asdict(p) for p in all_personas],
         "topics": TOPICS,
         "routing_triggers": CLAUDE_TRIGGERS,
         "config": {

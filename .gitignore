@@ -1,6 +1,9 @@
 # Logs
 *.log
 logs/
+nairobi_bot.log
+scheduler.log
+api_server.log
 
 # Environment
 .env

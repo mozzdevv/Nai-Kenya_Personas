@@ -29,20 +29,19 @@ def main():
     from scheduler.loop import MVPLoop
     
     logger.info("=" * 60)
-    logger.info("🇰🇪 NAIROBI SWAHILI BOT - X PERSONA BOTS")
+    logger.info("🇰🇪 NAIROBI SWAHILI BOT — X PERSONA BOTS")
     logger.info("=" * 60)
-    logger.info(f"Personas: Juma (@kamaukeeeraw), Amani (@wanjikusagee)")
     logger.info(f"Loop interval: {settings.loop_interval_hours} hours")
     logger.info(f"Dry run mode: {settings.dry_run}")
     logger.info("=" * 60)
     
-    # Print start confirmations
+    # Print start confirmations for all active personas
     from personas import get_personas
     
-    juma, amani = get_personas()
-    
-    logger.info(f"Juma: {juma.get_start_confirmation()}")
-    logger.info(f"Amani: {amani.get_start_confirmation()}")
+    all_personas = get_personas()
+    logger.info(f"Loaded {len(all_personas)} personas:")
+    for p in all_personas:
+        logger.info(f"  - {p.name} ({p.handle}): {p.get_start_confirmation()}")
     logger.info("=" * 60)
     
     # Initialize and start loop

@@ -24,7 +24,7 @@ POSTS_PER_PERSONA = 5
 
 
 def main():
-    from config import settings, TOPICS, SEED_ACCOUNTS
+    from config import settings, TOPICS, SEED_ACCOUNTS, PERSONA_TOPICS
     from personas import get_personas
     from llm.router import HybridRouter
     from rag.pinecone_store import PineconeStore
@@ -34,7 +34,8 @@ def main():
     from api.database import ActivityLogger
 
     logger.info("=" * 60)
-    logger.info(f"🇰🇪 PRODUCTION TEST — {POSTS_PER_PERSONA} posts per persona (originals + quotes)")
+    logger.info(f"🇰🇪 NAIROBI SWAHILI BOT — PRODUCTION TEST")
+    logger.info(f"   {POSTS_PER_PERSONA} posts per persona (originals + quotes)")
     logger.info("=" * 60)
 
     # Initialize shared services
@@ -48,7 +49,7 @@ def main():
         index_name=settings.pinecone_index_name,
     )
 
-    juma_persona, amani_persona = get_personas()
+    all_personas = get_personas()
 
     # ── Refresh RAG from seed accounts ──
     logger.info("\n📡 Refreshing RAG from seed accounts...")
@@ -60,19 +61,14 @@ def main():
             seed_accounts=SEED_ACCOUNTS,
             max_per_account=20,
         )
-
         if tweets:
             all_fetched_tweets = tweets
             stored = rag_store.store_tweets(tweets, source_account="seed_mix")
             logger.info(f"  Stored {stored} tweets in Pinecone RAG")
-
             ActivityLogger.log_rag_activity(
-                action="store",
-                source="seed_accounts",
-                query="prod_test_refresh",
-                results_count=stored,
-                details={"total_fetched": len(tweets)},
-                persona="system"
+                action="store", source="seed_accounts",
+                query="prod_test_refresh", results_count=stored,
+                details={"total_fetched": len(tweets)}, persona="system"
             )
         else:
             logger.warning("  No tweets fetched from seed accounts")
@@ -80,7 +76,6 @@ def main():
         logger.error(f"  RAG refresh failed: {e}")
 
     # ── Build quotable tweets pool ──
-    # Pick tweets with reasonable text length for quoting
     quotable_tweets = [
         t for t in all_fetched_tweets
         if t.get("text") and len(t["text"]) > 20 and len(t["text"]) < 250
@@ -90,51 +85,55 @@ def main():
     random.shuffle(quotable_tweets)
     logger.info(f"  Quotable tweets pool: {len(quotable_tweets)}")
 
-    # Initialize X clients
-    juma_client = XClient(
-        consumer_key=settings.kamau.consumer_key,
-        consumer_secret=settings.kamau.consumer_secret,
-        access_token=settings.kamau.access_token,
-        access_token_secret=settings.kamau.access_token_secret,
-        bearer_token=settings.kamau.bearer_token,
-        persona_name="Juma",
-    )
+    # ── Build credential map ──
+    cred_map = {
+        "kamau":   settings.kamau,
+        "wanjiku": settings.wanjiku,
+        "baraka":  settings.baraka,
+        "zawadi":  settings.zawadi,
+        "zuri":    settings.zuri,
+        "john":    settings.john,
+        "karen":   settings.karen,
+    }
 
-    amani_client = XClient(
-        consumer_key=settings.wanjiku.consumer_key,
-        consumer_secret=settings.wanjiku.consumer_secret,
-        access_token=settings.wanjiku.access_token,
-        access_token_secret=settings.wanjiku.access_token_secret,
-        bearer_token=settings.wanjiku.bearer_token,
-        persona_name="Amani",
-    )
+    # ── Filter to personas with valid credentials ──
+    active_personas = []
+    for persona in all_personas:
+        creds = cred_map.get(persona.credentials_key)
+        if not creds:
+            logger.warning(f"⚠️  Skipping {persona.name} ({persona.handle}) — credentials missing/incomplete")
+            continue
+        active_personas.append((persona, creds))
 
-    personas = [
-        (juma_persona, juma_client, "Juma"),
-        (amani_persona, amani_client, "Amani"),
-    ]
+    logger.info(f"\n✅ Active personas: {len(active_personas)} / {len(all_personas)}")
+    for p, _ in active_personas:
+        logger.info(f"   - {p.name} ({p.handle})")
 
-    # Decide random action sequence for each persona
-    # ~60% original, ~40% quote tweet
     all_topic_keys = list(TOPICS.keys())
-    quote_idx = 0  # Track which quotable tweet to use next
 
-    for persona, x_client, name in personas:
-        # Build random action list: True = original, False = quote
+    for persona, creds in active_personas:
+        x_client = XClient(
+            consumer_key=creds.consumer_key,
+            consumer_secret=creds.consumer_secret,
+            access_token=creds.access_token,
+            access_token_secret=creds.access_token_secret,
+            bearer_token=creds.bearer_token,
+            persona_name=persona.name,
+        )
+
+        # Build random action list: ~60% original, ~40% quote
         actions = []
         for _ in range(POSTS_PER_PERSONA):
             actions.append("original" if random.random() < 0.6 else "quote")
-        
-        # Ensure at least 1 quote and 1 original per persona
         if "quote" not in actions:
             actions[random.randint(0, len(actions)-1)] = "quote"
         if "original" not in actions:
             actions[random.randint(0, len(actions)-1)] = "original"
-        
-        logger.info(f"\n{'='*50}")
-        logger.info(f"🎭 Posting for {name} ({persona.handle})")
-        logger.info(f"  Action plan: {actions}")
-        logger.info(f"{'='*50}")
+
+        logger.info(f"\n{'='*55}")
+        logger.info(f"🎭 Posting for {persona.name} ({persona.handle})")
+        logger.info(f"   Action plan: {actions}")
+        logger.info(f"{'='*55}")
 
         for post_num, action in enumerate(actions, 1):
             if action == "quote" and quote_idx < len(quotable_tweets):
@@ -147,20 +146,15 @@ def main():
                 logger.info(f"\n--- Post {post_num}/{POSTS_PER_PERSONA} | 🔁 QUOTE TWEET")
                 logger.info(f"  Quoting: \"{tweet_text[:80]}...\" (ID: {tweet_id})")
 
-                # Get RAG examples for the quoted tweet's style
                 examples = rag_store.retrieve_similar(tweet_text, top_k=3)
                 example_texts = [e["text"] for e in examples]
 
                 ActivityLogger.log_rag_activity(
-                    action="retrieve",
-                    source="pinecone",
-                    query=tweet_text[:100],
-                    results_count=len(examples),
-                    details=examples,
-                    persona=persona.handle
+                    action="retrieve", source="pinecone",
+                    query=tweet_text[:100], results_count=len(examples),
+                    details=examples, persona=persona.handle
                 )
 
-                # Generate comment
                 content, model_used, trigger_score, matched_triggers, reason = llm_router.generate(
                     topic=tweet_text,
                     persona_description=persona.get_system_prompt(),
@@ -171,51 +165,34 @@ def main():
 
                 logger.info(f"  Model: {model_used} | Comment: {content}")
 
-                # Log LLM routing
                 ActivityLogger.log_llm_routing(
-                    persona=persona.handle,
-                    topic=tweet_text[:100],
-                    task="quote_comment",
-                    decision=model_used,
-                    trigger_score=trigger_score,
-                    triggers_matched=matched_triggers,
-                    reason=reason
+                    persona=persona.handle, topic=tweet_text[:100],
+                    task="quote_comment", decision=model_used,
+                    trigger_score=trigger_score, triggers_matched=matched_triggers, reason=reason
                 )
 
-                # Validate
                 validator = ContentValidator()
                 result = validator.validate(content, persona.handle, tweet_text[:50])
                 logger.info(f"  Validation: {result.summary}")
 
-                # Post quote tweet
                 try:
-                    post_result = x_client.quote_tweet(
-                        quote_tweet_id=tweet_id,
-                        comment=content,
-                    )
+                    post_result = x_client.quote_tweet(quote_tweet_id=tweet_id, comment=content)
                     posted_id = post_result.get("id", "unknown") if isinstance(post_result, dict) else str(post_result)
                     logger.info(f"  ✅ QUOTE POSTED! Tweet ID: {posted_id}")
-
                     ActivityLogger.log_post(
-                        tweet_id=posted_id,
-                        persona=persona.handle,
-                        content=content,
-                        post_type="quote_tweet",
-                        llm_used=model_used,
-                        quoted_tweet_id=tweet_id,
+                        tweet_id=posted_id, persona=persona.handle, content=content,
+                        post_type="quote_tweet", llm_used=model_used, quoted_tweet_id=tweet_id,
                         authenticity_score=result.authenticity_score,
                         validation_issues=result.issues + result.warnings if (result.issues or result.warnings) else None,
                     )
                 except Exception as e:
                     logger.error(f"  ❌ Quote failed: {e}")
-                    ActivityLogger.log_error(
-                        level="ERROR", component="prod_test",
-                        message=str(e), traceback=f"quote tweet_id: {tweet_id}"
-                    )
+                    ActivityLogger.log_error(level="ERROR", component="prod_test", message=str(e), traceback=f"quote tweet_id: {tweet_id}")
 
             else:
                 # ── ORIGINAL POST ──
-                topic_key = random.choice(all_topic_keys)
+                persona_topic_keys = PERSONA_TOPICS.get(persona.credentials_key, all_topic_keys)
+                topic_key = random.choice(persona_topic_keys)
                 topic = random.choice(TOPICS[topic_key])
 
                 logger.info(f"\n--- Post {post_num}/{POSTS_PER_PERSONA} | ✏️ ORIGINAL | [{topic_key}] {topic[:60]}...")
@@ -225,12 +202,9 @@ def main():
                 logger.info(f"  RAG examples: {len(example_texts)}")
 
                 ActivityLogger.log_rag_activity(
-                    action="retrieve",
-                    source="pinecone",
-                    query=topic,
-                    results_count=len(examples),
-                    details=examples,
-                    persona=persona.handle
+                    action="retrieve", source="pinecone",
+                    query=topic, results_count=len(examples),
+                    details=examples, persona=persona.handle
                 )
 
                 content, model_used, trigger_score, matched_triggers, reason = llm_router.generate(
@@ -245,13 +219,9 @@ def main():
                 logger.info(f"  Generated: {content}")
 
                 ActivityLogger.log_llm_routing(
-                    persona=persona.handle,
-                    topic=topic,
-                    task="original_post",
-                    decision=model_used,
-                    trigger_score=trigger_score,
-                    triggers_matched=matched_triggers,
-                    reason=reason
+                    persona=persona.handle, topic=topic, task="original_post",
+                    decision=model_used, trigger_score=trigger_score,
+                    triggers_matched=matched_triggers, reason=reason
                 )
 
                 validator = ContentValidator()
@@ -262,24 +232,16 @@ def main():
                     post_result = x_client.post_tweet(content)
                     posted_id = post_result.get("id", "unknown") if isinstance(post_result, dict) else str(post_result)
                     logger.info(f"  ✅ POSTED! Tweet ID: {posted_id}")
-
                     ActivityLogger.log_post(
-                        tweet_id=posted_id,
-                        persona=persona.handle,
-                        content=content,
-                        post_type="original_post",
-                        llm_used=model_used,
+                        tweet_id=posted_id, persona=persona.handle, content=content,
+                        post_type="original_post", llm_used=model_used,
                         authenticity_score=result.authenticity_score,
                         validation_issues=result.issues + result.warnings if (result.issues or result.warnings) else None,
                     )
                 except Exception as e:
                     logger.error(f"  ❌ Post failed: {e}")
-                    ActivityLogger.log_error(
-                        level="ERROR", component="prod_test",
-                        message=str(e), traceback=f"topic: {topic}, persona: {persona.handle}"
-                    )
+                    ActivityLogger.log_error(level="ERROR", component="prod_test", message=str(e), traceback=f"topic: {topic}, persona: {persona.handle}")
 
-            # Small delay between posts to be nice to the API
             time.sleep(2)
 
     logger.info("\n" + "=" * 60)
